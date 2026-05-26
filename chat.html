@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 聊天助手</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #app {
+            width: 90%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .config-section {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .config-section input {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 300px;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.assistant {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            line-height: 1.6;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-label {
+            font-size: 12px;
+            color: #999;
+            margin-bottom: 5px;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area textarea {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: none;
+            height: 50px;
+            font-family: inherit;
+        }
+
+        .input-area textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .typing-indicator {
+            display: inline-block;
+            margin-left: 5px;
+        }
+
+        .typing-indicator::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: ''; }
+            40% { content: '.'; }
+            60% { content: '..'; }
+            80%, 100% { content: '...'; }
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 20px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>🤖 RAG 聊天助手</h1>
+            <div class="config-section">
+                <input 
+                    v-model="knowledgeBaseId" 
+                    placeholder="输入知识库 ID (例如: 5a80bc38-54f9-4a41-9d84-733473a47274)"
+                    type="text"
+                />
+            </div>
+        </div>
+
+        <div v-if="errorMessage" class="error-message">
+            {{ errorMessage }}
+        </div>
+
+        <div class="chat-container" ref="chatContainer">
+            <div v-if="messages.length === 0" class="empty-state">
+                <p>开始新的对话吧！💬</p>
+            </div>
+            
+            <div 
+                v-for="(msg, index) in messages" 
+                :key="index" 
+                :class="['message', msg.role]"
+            >
+                <div class="message-content">
+                    <div v-if="msg.role === 'user'" class="message-label">你</div>
+                    <div v-else class="message-label">AI 助手</div>
+                    {{ msg.content }}
+                    <span v-if="msg.isStreaming" class="typing-indicator"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <textarea 
+                v-model="inputMessage" 
+                @keyup.enter.exact="sendMessage"
+                placeholder="输入消息... (按 Enter 发送)"
+                :disabled="isSending"
+            ></textarea>
+            <button 
+                @click="sendMessage" 
+                :disabled="isSending || !inputMessage.trim() || !knowledgeBaseId"
+                class="send-button"
+            >
+                {{ isSending ? '发送中...' : '发送' }}
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    knowledgeBaseId: '',
+                    inputMessage: '',
+                    messages: [],
+                    isSending: false,
+                    errorMessage: ''
+                };
+            },
+            methods: {
+                async sendMessage() {
+                    if (!this.inputMessage.trim() || !this.knowledgeBaseId || this.isSending) {
+                        return;
+                    }
+
+                    const userMessage = this.inputMessage.trim();
+                    
+                    // 添加用户消息
+                    this.messages.push({
+                        role: 'user',
+                        content: userMessage
+                    });
+
+                    // 清空输入框
+                    this.inputMessage = '';
+                    this.errorMessage = '';
+                    this.isSending = true;
+
+                    // 添加 AI 消息占位符
+                    const aiMessageIndex = this.messages.length;
+                    this.messages.push({
+                        role: 'assistant',
+                        content: '',
+                        isStreaming: true
+                    });
+
+                    try {
+                        await this.streamChat(userMessage, aiMessageIndex);
+                    } catch (error) {
+                        this.errorMessage = '请求失败: ' + error.message;
+                        this.messages[aiMessageIndex].content = '抱歉，发生了错误。';
+                        this.messages[aiMessageIndex].isStreaming = false;
+                    } finally {
+                        this.isSending = false;
+                        this.$nextTick(() => {
+                            this.scrollToBottom();
+                        });
+                    }
+                },
+
+                async streamChat(message, messageIndex) {
+                    const response = await fetch(`http://localhost:8080/api/knowledge-bases/${this.knowledgeBaseId}/chat/stream`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: message
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let accumulatedText = '';
+
+                    try {
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            
+                            if (done) {
+                                break;
+                            }
+
+                            const chunk = decoder.decode(value, { stream: true });
+                            const lines = chunk.split('\n');
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const data = line.substring(6);
+                                    if (data) {
+                                        accumulatedText += data;
+                                        this.messages[messageIndex].content = accumulatedText;
+                                        this.$nextTick(() => {
+                                            this.scrollToBottom();
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        reader.releaseLock();
+                        this.messages[messageIndex].isStreaming = false;
+                    }
+                },
+
+                scrollToBottom() {
+                    if (this.$refs.chatContainer) {
+                        this.$refs.chatContainer.scrollTop = this.$refs.chatContainer.scrollHeight;
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

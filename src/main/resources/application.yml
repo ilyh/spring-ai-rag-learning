@@ -1,0 +1,71 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-rag-learning
+  
+  # H2 Database Configuration
+  datasource:
+    url: jdbc:h2:file:./data/ragdb;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    database-platform: org.hibernate.dialect.H2Dialect
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  # File Upload Configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  
+  # Spring AI Ollama Configuration
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        model: gemma4:e2b
+        options:
+          temperature: 0.7
+      embedding:
+        model: nomic-embed-text
+      init:
+        timeout: 5m
+    
+    # Milvus Configuration
+    vectorstore:
+      milvus:
+        client:
+          host: localhost
+          port: 19530
+        database-name: default
+        collection-name: vector_store
+        embedding-dimension: 768
+        index-type: IVF_FLAT
+        metric-type: COSINE
+        initialize-schema: true
+# Application Custom Configuration
+app:
+  rag:
+    chunk-size: 800
+    chunk-overlap: 50
+    top-k: 2
+    similarity-threshold: 0.3
+    max-history-turns: 3
+  
+  file:
+    upload-dir: ./uploads
+    allowed-types: .pdf,.txt,.md
