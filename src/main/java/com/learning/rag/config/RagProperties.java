@@ -10,9 +10,9 @@ import org.springframework.context.annotation.Configuration;
 public class RagProperties {
     
     private int chunkSize = 800;
-    private int chunkOverlap = 100;
-    private int topK = 5;
-    private double similarityThreshold = 0.7;
+    private int chunkOverlap = 50;
+    private int topK = 2;
+    private double similarityThreshold = 0.3;
     /**
      * Max conversation history turns to include in prompt (1 turn = 1 user + 1 assistant message).
      */

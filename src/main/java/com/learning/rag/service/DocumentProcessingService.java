@@ -142,4 +142,9 @@ public class DocumentProcessingService {
         vectorStore.delete("document_id == '" + documentId + "'");
         log.info("Deleted vectors for document: {}", documentId);
     }
+
+    public void deleteKnowledgeBaseVectors(String knowledgeBaseId) {
+        vectorStore.delete("knowledge_base_id == '" + knowledgeBaseId + "'");
+        log.info("Deleted vectors for knowledge base: {}", knowledgeBaseId);
+    }
 }

@@ -110,7 +110,6 @@ public class RagService {
     
     private String generateAnswer(String question, String context, List<Message> historyMessages) {
         String systemPrompt = """
-            /no_think
             You are a knowledgeable assistant. Please answer the question based on the provided context and conversation history.
             If the context doesn't contain relevant information, please clearly state that.
             """;
@@ -237,7 +236,6 @@ public class RagService {
 
         // Build prompt
         String systemPrompt = """
-            /no_think
             You are a knowledgeable assistant. Please answer the question based on the provided context and conversation history.
             If the context doesn't contain relevant information, please clearly state that.
             """;

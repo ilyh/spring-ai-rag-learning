@@ -63,6 +63,9 @@ public class KnowledgeBaseService {
     public void deleteKnowledgeBase(String id) {
         KnowledgeBase kb = knowledgeBaseRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Knowledge base not found: " + id));
+
+        // Delete all vectors from Milvus before removing metadata.
+        documentProcessingService.deleteKnowledgeBaseVectors(id);
         
         // Delete all conversations
         conversationRepository.deleteByKnowledgeBaseId(id);
