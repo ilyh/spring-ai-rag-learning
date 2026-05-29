@@ -113,7 +113,7 @@ public class KnowledgeBaseController {
     public ResponseEntity<Void> deleteConversation(
             @PathVariable String kbId,
             @PathVariable String convId) {
-        ragService.deleteConversation(convId);
+        ragService.deleteConversation(kbId, convId);
         return ResponseEntity.noContent().build();
     }
 }

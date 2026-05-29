@@ -4,12 +4,15 @@ import com.learning.rag.dto.DocumentDTO;
 import com.learning.rag.dto.KnowledgeBaseDTO;
 import com.learning.rag.entity.Document;
 import com.learning.rag.entity.KnowledgeBase;
+import com.learning.rag.event.DocumentDeletedEvent;
+import com.learning.rag.event.KnowledgeBaseDeletedEvent;
 import com.learning.rag.exception.ResourceNotFoundException;
 import com.learning.rag.repository.ConversationRepository;
 import com.learning.rag.repository.DocumentRepository;
 import com.learning.rag.repository.KnowledgeBaseRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,6 +31,7 @@ public class KnowledgeBaseService {
     private final DocumentRepository documentRepository;
     private final ConversationRepository conversationRepository;
     private final DocumentProcessingService documentProcessingService;
+    private final ApplicationEventPublisher eventPublisher;
     
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     
@@ -64,18 +68,18 @@ public class KnowledgeBaseService {
         KnowledgeBase kb = knowledgeBaseRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Knowledge base not found: " + id));
 
-        // Delete all vectors from Milvus before removing metadata.
-        documentProcessingService.deleteKnowledgeBaseVectors(id);
-        
         // Delete all conversations
         conversationRepository.deleteByKnowledgeBaseId(id);
-        
+
         // Delete all documents
         documentRepository.deleteByKnowledgeBaseId(id);
-        
+
         // Delete knowledge base
         knowledgeBaseRepository.delete(kb);
-        
+
+        // Publish event to delete vectors after transaction commits
+        eventPublisher.publishEvent(new KnowledgeBaseDeletedEvent(id));
+
         log.info("Deleted knowledge base: {}", id);
     }
     
@@ -127,17 +131,17 @@ public class KnowledgeBaseService {
     public void deleteDocument(String knowledgeBaseId, String documentId) {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
-        
+
         if (!document.getKnowledgeBase().getId().equals(knowledgeBaseId)) {
             throw new RuntimeException("Document does not belong to this knowledge base");
         }
-        
-        // Delete vectors from Milvus
-        documentProcessingService.deleteDocumentVectors(documentId);
-        
+
         // Delete document
         documentRepository.delete(document);
-        
+
+        // Publish event to delete vectors after transaction commits
+        eventPublisher.publishEvent(new DocumentDeletedEvent(documentId));
+
         log.info("Deleted document: {}", documentId);
     }
     

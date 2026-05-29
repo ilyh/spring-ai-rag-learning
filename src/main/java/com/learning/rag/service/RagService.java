@@ -7,6 +7,7 @@ import com.learning.rag.entity.Conversation;
 import com.learning.rag.entity.KnowledgeBase;
 import com.learning.rag.entity.Message;
 import com.learning.rag.exception.AIServiceException;
+import com.learning.rag.exception.ResourceNotFoundException;
 import com.learning.rag.repository.ConversationRepository;
 import com.learning.rag.repository.MessageRepository;
 import lombok.RequiredArgsConstructor;
@@ -303,7 +304,14 @@ public class RagService {
     }
     
     @Transactional
-    public void deleteConversation(String conversationId) {
-        conversationRepository.deleteById(conversationId);
+    public void deleteConversation(String knowledgeBaseId, String conversationId) {
+        Conversation conversation = conversationRepository.findById(conversationId)
+            .orElseThrow(() -> new ResourceNotFoundException("Conversation not found: " + conversationId));
+
+        if (!conversation.getKnowledgeBase().getId().equals(knowledgeBaseId)) {
+            throw new IllegalArgumentException("Conversation does not belong to this knowledge base");
+        }
+
+        conversationRepository.delete(conversation);
     }
 }

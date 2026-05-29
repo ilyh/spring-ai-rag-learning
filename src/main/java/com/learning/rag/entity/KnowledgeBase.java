@@ -37,6 +37,6 @@ public class KnowledgeBase {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
     
-    @OneToMany(mappedBy = "knowledgeBase", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "knowledgeBase")
     private List<Document> documents;
 }

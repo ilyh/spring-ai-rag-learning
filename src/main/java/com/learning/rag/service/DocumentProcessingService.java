@@ -3,6 +3,8 @@ package com.learning.rag.service;
 import com.learning.rag.config.RagProperties;
 import com.learning.rag.entity.Document;
 import com.learning.rag.entity.KnowledgeBase;
+import com.learning.rag.event.DocumentDeletedEvent;
+import com.learning.rag.event.KnowledgeBaseDeletedEvent;
 import com.learning.rag.exception.DocumentProcessingException;
 import com.learning.rag.exception.ResourceNotFoundException;
 import com.learning.rag.repository.DocumentRepository;
@@ -20,6 +22,8 @@ import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -139,12 +143,42 @@ public class DocumentProcessingService {
     }
 
     public void deleteDocumentVectors(String documentId) {
+        validateUuid(documentId);
         vectorStore.delete("document_id == '" + documentId + "'");
         log.info("Deleted vectors for document: {}", documentId);
     }
 
     public void deleteKnowledgeBaseVectors(String knowledgeBaseId) {
+        validateUuid(knowledgeBaseId);
         vectorStore.delete("knowledge_base_id == '" + knowledgeBaseId + "'");
         log.info("Deleted vectors for knowledge base: {}", knowledgeBaseId);
+    }
+
+    private void validateUuid(String id) {
+        try {
+            UUID.fromString(id);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid UUID format: " + id);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onKnowledgeBaseDeleted(KnowledgeBaseDeletedEvent event) {
+        try {
+            deleteKnowledgeBaseVectors(event.getKnowledgeBaseId());
+        } catch (Exception e) {
+            log.error("Failed to delete vectors for knowledge base: {}. Manual cleanup required.",
+                event.getKnowledgeBaseId(), e);
+        }
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onDocumentDeleted(DocumentDeletedEvent event) {
+        try {
+            deleteDocumentVectors(event.getDocumentId());
+        } catch (Exception e) {
+            log.error("Failed to delete vectors for document: {}. Manual cleanup required.",
+                event.getDocumentId(), e);
+        }
     }
 }
