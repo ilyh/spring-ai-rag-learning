@@ -2,7 +2,6 @@ package com.learning.rag.service;
 
 import com.learning.rag.config.RagProperties;
 import com.learning.rag.entity.Document;
-import com.learning.rag.entity.KnowledgeBase;
 import com.learning.rag.event.DocumentDeletedEvent;
 import com.learning.rag.event.KnowledgeBaseDeletedEvent;
 import com.learning.rag.exception.DocumentProcessingException;
@@ -66,39 +65,51 @@ public class DocumentProcessingService {
      * Process document asynchronously: extract text, split into chunks, store in vector DB.
      */
     @Async
-    @Transactional
     public void processDocumentAsync(String documentId, String filePath, String fileName,
                                       String knowledgeBaseId, String collectionName) {
+        try {
+            processDocumentInTransaction(documentId, filePath, fileName, knowledgeBaseId, collectionName);
+        } catch (Exception e) {
+            log.error("Failed to process document: {}", fileName, e);
+            updateDocumentStatus(documentId, Document.ProcessingStatus.FAILED);
+        }
+    }
+
+    @Transactional
+    public void processDocumentInTransaction(String documentId, String filePath, String fileName,
+                                              String knowledgeBaseId, String collectionName) throws IOException {
         Document document = documentRepository.findById(documentId)
             .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
 
-        try {
-            document.setStatus(Document.ProcessingStatus.PROCESSING);
-            document.setFilePath(filePath);
-            documentRepository.save(document);
+        document.setStatus(Document.ProcessingStatus.PROCESSING);
+        document.setFilePath(filePath);
+        documentRepository.save(document);
 
-            String text = extractText(filePath, fileName);
+        String text = extractText(filePath, fileName);
 
-            List<org.springframework.ai.document.Document> chunks = splitText(text);
+        List<org.springframework.ai.document.Document> chunks = splitText(text);
 
-            chunks.forEach(chunk -> {
-                chunk.getMetadata().put("document_id", documentId);
-                chunk.getMetadata().put("file_name", fileName);
-                chunk.getMetadata().put("knowledge_base_id", knowledgeBaseId);
-                chunk.getMetadata().put("collection_name", collectionName);
-            });
+        chunks.forEach(chunk -> {
+            chunk.getMetadata().put("document_id", documentId);
+            chunk.getMetadata().put("file_name", fileName);
+            chunk.getMetadata().put("knowledge_base_id", knowledgeBaseId);
+            chunk.getMetadata().put("collection_name", collectionName);
+        });
 
-            vectorStore.add(chunks);
+        vectorStore.add(chunks);
 
-            document.setChunkCount(chunks.size());
-            document.setStatus(Document.ProcessingStatus.COMPLETED);
-            documentRepository.save(document);
+        document.setChunkCount(chunks.size());
+        document.setStatus(Document.ProcessingStatus.COMPLETED);
+        documentRepository.save(document);
 
-            log.info("Document processed successfully: {}", fileName);
+        log.info("Document processed successfully: {}", fileName);
+    }
 
-        } catch (Exception e) {
-            log.error("Failed to process document: {}", fileName, e);
-            document.setStatus(Document.ProcessingStatus.FAILED);
+    @Transactional
+    public void updateDocumentStatus(String documentId, Document.ProcessingStatus status) {
+        Document document = documentRepository.findById(documentId).orElse(null);
+        if (document != null) {
+            document.setStatus(status);
             documentRepository.save(document);
         }
     }
@@ -165,10 +176,10 @@ public class DocumentProcessingService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onKnowledgeBaseDeleted(KnowledgeBaseDeletedEvent event) {
         try {
-            deleteKnowledgeBaseVectors(event.getKnowledgeBaseId());
+            deleteKnowledgeBaseVectors(event.knowledgeBaseId());
         } catch (Exception e) {
             log.error("Failed to delete vectors for knowledge base: {}. Manual cleanup required.",
-                event.getKnowledgeBaseId(), e);
+                event.knowledgeBaseId(), e);
         }
     }
 
